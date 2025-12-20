@@ -1,0 +1,25 @@
+services:
+  db:
+    image: postgres
+    restart: always
+    shm_size: 128mb
+    environment:
+      POSTGRES_PASSWORD: passwd
+    volumes:
+      - ./sql:/var/lib/postgresql/data/sql
+    ports:
+      - 5433:5432
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8081:8080
+
+  cache:
+    image: redis:8.4-alpine
+    restart: always
+    ports:
+      - "6380:6379"
+    command: redis-server --save 20 1 --loglevel warning
+
