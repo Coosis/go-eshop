@@ -72,14 +72,14 @@ func (s *StockActor) GetStockAdjustments(
 	pg_createdAfter := pgtype.Timestamptz{Valid: false}
 	if filter.CreatedAfter != nil {
 		pg_createdAfter = pgtype.Timestamptz{
-			Time:  time.Unix(*filter.CreatedAfter, 0),
+			Time:  time.UnixMilli(*filter.CreatedAfter),
 			Valid: true,
 		}
 	}
 	pg_createdBefore := pgtype.Timestamptz{Valid: false}
 	if filter.CreatedBefore != nil {
 		pg_createdBefore = pgtype.Timestamptz{
-			Time:  time.Unix(*filter.CreatedBefore, 0),
+			Time:  time.UnixMilli(*filter.CreatedBefore),
 			Valid: true,
 		}
 	}

@@ -152,7 +152,7 @@ func (o *OrderActor) GetOrders(
 			Status:          status,
 			PaymentIntentID: &r.PaymentIntentID.String,
 			Notes:           &r.Notes.String,
-			CreatedAt:       r.CreatedAt.Time.Unix(),
+			CreatedAt:       r.CreatedAt.Time.UnixMilli(),
 			Version:         r.Version,
 		}
 		order_infos = append(order_infos, order_info)
@@ -193,7 +193,7 @@ func (o *OrderActor) GetOrderByID(
 		Status:          status,
 		PaymentIntentID: &rows.PaymentIntentID.String,
 		Notes:           &rows.Notes.String,
-		CreatedAt:       rows.CreatedAt.Time.Unix(),
+		CreatedAt:       rows.CreatedAt.Time.UnixMilli(),
 		Version:         rows.Version,
 	}, nil
 }
@@ -225,7 +225,7 @@ func (o *OrderActor) CancelOrder(
 		Status:          status,
 		PaymentIntentID: &rows.PaymentIntentID.String,
 		Notes:           &rows.Notes.String,
-		CreatedAt:       rows.CreatedAt.Time.Unix(),
+		CreatedAt:       rows.CreatedAt.Time.UnixMilli(),
 		Version:         rows.Version,
 	}, nil
 }
@@ -289,7 +289,7 @@ func (o *OrderActor) PayOrder(
 		Status:          status,
 		PaymentIntentID: &rows.PaymentIntentID.String,
 		Notes:           &rows.Notes.String,
-		CreatedAt:       rows.CreatedAt.Time.Unix(),
+		CreatedAt:       rows.CreatedAt.Time.UnixMilli(),
 		Version:         rows.Version,
 	}, nil
 }
@@ -322,7 +322,7 @@ func (o *OrderActor) RefundOrder(
 		Status:          status,
 		PaymentIntentID: &rows.PaymentIntentID.String,
 		Notes:           &rows.Notes.String,
-		CreatedAt:       rows.CreatedAt.Time.Unix(),
+		CreatedAt:       rows.CreatedAt.Time.UnixMilli(),
 		Version:         rows.Version,
 	}, nil
 }

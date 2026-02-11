@@ -34,7 +34,7 @@ type GetOrderRequest struct {
 type PayOrderRequest struct {
 	UserID          int32
 
-	OrderID         int32  `json:"order_id" validate:"min=1,required"`
+	OrderID         int32  `param:"order_id" validate:"min=1,required"`
 	PaymentIntentID string `json:"payment_intent_id"`
 }
 

@@ -5,6 +5,8 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+
+	"github.com/spf13/cobra"
 )
 
 func reqAndPrint(req *http.Request) error {
@@ -30,4 +32,20 @@ func generateChars(l int) string {
 		b[i] = charset[id]
 	}
 	return string(b)
+}
+
+func addPagingFlags(cmd *cobra.Command, page *int32, perPage *int32, defaultPerPage int32) {
+	cmd.Flags().Int32VarP(
+		page,
+		"page",
+		"p",
+		1,
+		"the page number to retrieve",
+	)
+	cmd.Flags().Int32Var(
+		perPage,
+		"per-page",
+		defaultPerPage,
+		"number of items per page",
+	)
 }

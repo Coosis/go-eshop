@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"math/rand/v2"
 	"strings"
+	"strconv"
 
 	"github.com/Coosis/go-eshop/internal/catalog"
 )
@@ -34,4 +35,24 @@ func reqAndPrint(req *http.Request) error {
 	fmt.Println("response body:", string(msg))
 
 	return nil
+}
+
+func parseInt32List(csv string) ([]int32, error) {
+	if strings.TrimSpace(csv) == "" {
+		return []int32{}, nil
+	}
+	parts := strings.Split(csv, ",")
+	out := make([]int32, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		n, err := strconv.ParseInt(p, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("invalid int value: %q", p)
+		}
+		out = append(out, int32(n))
+	}
+	return out, nil
 }

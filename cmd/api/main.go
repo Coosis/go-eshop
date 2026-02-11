@@ -15,7 +15,9 @@ import (
 	"github.com/Coosis/go-eshop/internal/stock"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"github.com/redis/go-redis/v9"
+	validator "github.com/go-playground/validator/v10"
 )
 
 func init() {
@@ -57,6 +59,8 @@ func main() {
 	seckillActor := seckill.SeckillActor{Pool: pool, Client: client}
 
 	e := echo.New()
+	e.Validator = &CustomValidator{validator: validator.New()}
+	e.Use(middleware.Recover())
 	e.Use(auth.DevWithUserID(1))
 	handlers.RegisterCatalogProductRoutes(e, &catalogActor)
 	handlers.RegisterCatalogAdminRoutes(e, &catalogActor)

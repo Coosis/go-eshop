@@ -97,10 +97,61 @@ func init() {
 		"number of items per page",
 	)
 
+	changeCartItemQtyCmd.Flags().Int32Var(
+		&changeItemProductID,
+		"product-id",
+		-1,
+		"the product id of the item to update in the cart",
+	)
+	changeCartItemQtyCmd.MarkFlagRequired("product-id")
+	changeCartItemQtyCmd.Flags().Int32Var(
+		&changeItemDelta,
+		"delta",
+		0,
+		"the delta to apply to item quantity",
+	)
+	changeCartItemQtyCmd.MarkFlagRequired("delta")
+	changeCartItemQtyCmd.Flags().Int32VarP(
+		&changeItemPage,
+		"page",
+		"p",
+		1,
+		"the page number to retrieve",
+	)
+	changeCartItemQtyCmd.Flags().Int32Var(
+		&changeItemPerPage,
+		"per-page",
+		250,
+		"number of items per page",
+	)
+
+	removeCartItemCmd.Flags().Int32Var(
+		&removeItemProductID,
+		"product-id",
+		-1,
+		"the product id of the item to remove from the cart",
+	)
+	removeCartItemCmd.MarkFlagRequired("product-id")
+	removeCartItemCmd.Flags().Int32VarP(
+		&removeItemPage,
+		"page",
+		"p",
+		1,
+		"the page number to retrieve",
+	)
+	removeCartItemCmd.Flags().Int32Var(
+		&removeItemPerPage,
+		"per-page",
+		250,
+		"number of items per page",
+	)
+
 	rootCmd.AddCommand(GetCartCmd)
 	rootCmd.AddCommand(AddItemCmd)
 	rootCmd.AddCommand(clearCartCmd)
 	rootCmd.AddCommand(updateCartItemCmd)
+	rootCmd.AddCommand(changeCartItemQtyCmd)
+	rootCmd.AddCommand(removeCartItemCmd)
 }
 
 var (
@@ -228,3 +279,60 @@ func UpdateCartItem(cmd *cobra.Command, args []string) error {
 	return reqAndPrint(req)
 }
 
+var (
+	changeItemProductID int32
+	changeItemDelta int32
+	changeItemPage int32
+	changeItemPerPage int32
+)
+
+var changeCartItemQtyCmd = &cobra.Command{
+	Use:   "change-cart-item-qty",
+	Short: "change quantity of an item in the cart by delta",
+	RunE:  changeCartItemQty,
+}
+
+func changeCartItemQty(cmd *cobra.Command, args []string) error {
+	req, err := http.NewRequest(
+		"PATCH",
+		fmt.Sprintf("%s%s/items/%d", serverURL, cartPath, changeItemProductID),
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+	q := req.URL.Query()
+	q.Add("delta", fmt.Sprintf("%d", changeItemDelta))
+	q.Add("page", fmt.Sprintf("%d", changeItemPage))
+	q.Add("per_page", fmt.Sprintf("%d", changeItemPerPage))
+	req.URL.RawQuery = q.Encode()
+	return reqAndPrint(req)
+}
+
+var (
+	removeItemProductID int32
+	removeItemPage int32
+	removeItemPerPage int32
+)
+
+var removeCartItemCmd = &cobra.Command{
+	Use:   "remove-cart-item",
+	Short: "remove an item from the cart",
+	RunE:  removeCartItem,
+}
+
+func removeCartItem(cmd *cobra.Command, args []string) error {
+	req, err := http.NewRequest(
+		"DELETE",
+		fmt.Sprintf("%s%s/items/%d", serverURL, cartPath, removeItemProductID),
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+	q := req.URL.Query()
+	q.Add("page", fmt.Sprintf("%d", removeItemPage))
+	q.Add("per_page", fmt.Sprintf("%d", removeItemPerPage))
+	req.URL.RawQuery = q.Encode()
+	return reqAndPrint(req)
+}

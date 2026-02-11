@@ -54,6 +54,50 @@ func init() {
 	)
 	addSeckillCmd.MarkFlagRequired("seckill-stock")
 	rootCmd.AddCommand(addSeckillCmd)
+
+	updateSeckillCmd.Flags().Int32Var(
+		&updateSeckillID,
+		"id",
+		-1,
+		"the seckill event ID to update",
+	)
+	updateSeckillCmd.MarkFlagRequired("id")
+	updateSeckillCmd.Flags().Int32Var(
+		&updateSeckillProductID,
+		"product-id",
+		-1,
+		"the product ID for the seckill event",
+	)
+	updateSeckillCmd.MarkFlagRequired("product-id")
+	updateSeckillCmd.Flags().StringVar(
+		&updateSeckillStartTime,
+		"start-time",
+		"",
+		"the start time for the seckill event (RFC3339)",
+	)
+	updateSeckillCmd.MarkFlagRequired("start-time")
+	updateSeckillCmd.Flags().StringVar(
+		&updateSeckillEndTime,
+		"end-time",
+		"",
+		"the end time for the seckill event (RFC3339)",
+	)
+	updateSeckillCmd.MarkFlagRequired("end-time")
+	updateSeckillCmd.Flags().Int32Var(
+		&updateSeckillPriceCents,
+		"seckill-price-cents",
+		-1,
+		"the seckill price in cents for the seckill event",
+	)
+	updateSeckillCmd.MarkFlagRequired("seckill-price-cents")
+	updateSeckillCmd.Flags().Int32Var(
+		&updateSeckillStock,
+		"seckill-stock",
+		-1,
+		"the seckill stock for the seckill event",
+	)
+	updateSeckillCmd.MarkFlagRequired("seckill-stock")
+	rootCmd.AddCommand(updateSeckillCmd)
 }
 
 var (
@@ -62,6 +106,12 @@ var (
 	addSeckillEndTime string
 	addSeckillPriceCents int32
 	addSeckillStock int32
+	updateSeckillID int32
+	updateSeckillProductID int32
+	updateSeckillStartTime string
+	updateSeckillEndTime string
+	updateSeckillPriceCents int32
+	updateSeckillStock int32
 )
 
 var addSeckillCmd = &cobra.Command{
@@ -96,6 +146,47 @@ func addSeckill(cmd *cobra.Command, args []string) error {
 	req, err := http.NewRequest(
 		"POST",
 		fmt.Sprintf("%s%s%s", serverURL, adminPath, "/seckill/events"),
+		bytes.NewReader(orig_req),
+	)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return reqAndPrint(req)
+}
+
+var updateSeckillCmd = &cobra.Command{
+	Use:   "update-seckill",
+	Short: "Update a seckill event",
+	Long:  `Update a seckill event in the system.`,
+	RunE:  updateSeckill,
+}
+
+func updateSeckill(cmd *cobra.Command, args []string) error {
+	sttime, err := time.Parse(time.RFC3339, updateSeckillStartTime)
+	if err != nil {
+		return fmt.Errorf("invalid start time format: %v", err)
+	}
+	tstart := sttime.UnixMilli()
+
+	edtime, err := time.Parse(time.RFC3339, updateSeckillEndTime)
+	if err != nil {
+		return fmt.Errorf("invalid end time format: %v", err)
+	}
+	tend := edtime.UnixMilli()
+	orig_req, err := json.Marshal(&seckill.SeckillEventInfo{
+		ProductID: updateSeckillProductID,
+		StartTime: tstart,
+		EndTime: tend,
+		SeckillPriceCents: updateSeckillPriceCents,
+		SeckillStock: updateSeckillStock,
+	})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(
+		"PATCH",
+		fmt.Sprintf("%s%s%s/%d", serverURL, adminPath, "/seckill/events", updateSeckillID),
 		bytes.NewReader(orig_req),
 	)
 	if err != nil {

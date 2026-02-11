@@ -256,56 +256,10 @@ func (ca *CartActor) ClearCart(
 		Items: []CartItem{},
 		Page: 0,
 		PerPage: 0,
-		Total: rows[0],
+		Total: 0,
 	}
 	c := Cart{
 		Version: rows[0],
-		Items: paged,
-	}
-	return c, nil
-}
-
-func (ca *CartActor) RefreshCart(
-	ctx context.Context,
-	userID int32,
-	req RefreshCartRequest,
-) (Cart, error) {
-	queries := sqlc.New(ca.Pool)
-	rows, err := queries.RefreshCart(
-		ctx,
-		sqlc.RefreshCartParams{
-			UserID: pgtype.Int4{
-				Int32: userID,
-				Valid: true,
-			},
-			PageNumber: req.Page,
-			PageSize: req.PerPage,
-		},
-	)
-	if err != nil {
-		log.Printf("error refreshing cart: %v", err)
-		return Cart{}, err
-	}
-	items := []CartItem{}
-	if rows[0].TotalCount != 0 {
-		log.Infof("GetCurrentCart found %d items", rows[0].TotalCount)
-		for _, row := range rows {
-			item := CartItem{
-				ProductID: row.ProductID.Int32,
-				Quantity: row.Qty.Int32,
-				PriceCents: row.PriceCentsSnapshot.Int32,
-			}
-			items = append(items, item)
-		}
-	}
-	paged := comm.Page[CartItem]{
-		Items: items,
-		Page: req.Page,
-		PerPage: req.PerPage,
-		Total: rows[0].TotalCount,
-	}
-	c := Cart{
-		Version: rows[0].Version,
 		Items: paged,
 	}
 	return c, nil

@@ -22,7 +22,6 @@ func RegisterCartRoutes(e *echo.Echo, svc cart.CartService) {
 	g.PATCH("/items/:product_id", handler.ChangeItemQuantity)
 	g.DELETE("/items/:product_id", handler.RemoveItem)
 	g.DELETE("", handler.Clear)
-	g.POST("/refresh-cart", handler.Refresh)
 }
 
 func (h *CartHandler) GetCart(c echo.Context) error {
@@ -35,6 +34,10 @@ func (h *CartHandler) GetCart(c echo.Context) error {
 	if err := c.Bind(&params); err != nil {
 		log.Printf("error binding query params: %v", err)
 		return c.JSON(400, map[string]string{"error": "malformed query parameters"})
+	}
+	if err := c.Validate(&params); err != nil {
+		log.Printf("error validating query params: %v", err)
+		return c.JSON(400, map[string]string{"error": "invalid query parameters"})
 	}
 	log.Infof("getting cart for user ID: %d, page: %d, per_page: %d", uid, params.Page, params.PerPage)
 	cart, err := h.Svc.GetCurrentCart(c.Request().Context(), uid, cart.CartPaging{
@@ -60,6 +63,10 @@ func (h *CartHandler) UpdateItem(c echo.Context) error {
 	if err := c.Bind(&params); err != nil {
 		log.Printf("error binding query params: %v", err)
 		return c.JSON(400, map[string]string{"error": "malformed query parameters"})
+	}
+	if err := c.Validate(&params); err != nil {
+		log.Printf("error validating query params: %v", err)
+		return c.JSON(400, map[string]string{"error": "invalid query parameters"})
 	}
 	log.Infof("updating cart item for user ID: %d, page: %d, per_page: %d", uid, params.Page, params.PerPage)
 	mut, err := h.Svc.UpdateCartItem(
@@ -94,6 +101,10 @@ func (h *CartHandler) AddItem(c echo.Context) error {
 		log.Printf("error binding query params: %v", err)
 		return c.JSON(400, map[string]string{"error": "malformed query parameters"})
 	}
+	if err := c.Validate(&params); err != nil {
+		log.Printf("error validating query params: %v", err)
+		return c.JSON(400, map[string]string{"error": "invalid query parameters"})
+	}
 	log.Infof("adding an item for user ID: %d, page: %d, per_page: %d", uid, params.Page, params.PerPage)
 	mut, err := h.Svc.AddCartItem(
 		c.Request().Context(),
@@ -127,6 +138,10 @@ func (h *CartHandler) ChangeItemQuantity(c echo.Context) error {
 		log.Printf("error binding query params: %v", err)
 		return c.JSON(400, map[string]string{"error": "malformed query parameters"})
 	}
+	if err := c.Validate(&params); err != nil {
+		log.Printf("error validating query params: %v", err)
+		return c.JSON(400, map[string]string{"error": "invalid query parameters"})
+	}
 	mut, err := h.Svc.ChangeCartItemQuantity(
 		c.Request().Context(),
 		uid,
@@ -158,6 +173,10 @@ func (h *CartHandler) RemoveItem(c echo.Context) error {
 		log.Printf("error binding query params: %v", err)
 		return c.JSON(400, map[string]string{"error": "malformed query parameters"})
 	}
+	if err := c.Validate(&params); err != nil {
+		log.Printf("error validating query params: %v", err)
+		return c.JSON(400, map[string]string{"error": "invalid query parameters"})
+	}
 	mut, err := h.Svc.RemoveCartItem(
 		c.Request().Context(),
 		uid,
@@ -181,31 +200,6 @@ func (h *CartHandler) Clear(c echo.Context) error {
 	mut, err := h.Svc.ClearCart(c.Request().Context(), uid)
 	if err != nil {
 		log.Printf("error clearing cart: %v", err)
-		return c.JSON(500, map[string]string{"error": "internal server error"})
-	}
-	return c.JSON(200, mut)
-}
-
-func (h *CartHandler) Refresh(c echo.Context) error {
-	uid, _ := c.Get(auth.UserIDKey).(int32)
-	type queryParams struct {
-		ProductID int32 `param:"product_id" validate:"min=1,required"`
-		Page int32 `query:"page" validate:"min=1,required"`
-		PerPage int32 `query:"per_page" validate:"min=1,max=250,required"`
-	}
-	var params queryParams
-	if err := c.Bind(&params); err != nil {
-		log.Printf("error binding query params: %v", err)
-		return c.JSON(400, map[string]string{"error": "malformed query parameters"})
-	}
-	mut, err := h.Svc.RefreshCart(c.Request().Context(), uid, cart.RefreshCartRequest{
-		CartPaging: cart.CartPaging{
-			Page:    params.Page,
-			PerPage: params.PerPage,
-		},
-	})
-	if err != nil {
-		log.Printf("error refreshing cart: %v", err)
 		return c.JSON(500, map[string]string{"error": "internal server error"})
 	}
 	return c.JSON(200, mut)

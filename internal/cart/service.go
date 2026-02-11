@@ -56,5 +56,4 @@ type CartService interface {
 	ChangeCartItemQuantity(ctx context.Context, userID int32, req ChangeCartItemQuantityRequest) (Cart, error)
 	RemoveCartItem(ctx context.Context, userID int32, req RemoveCartItemRequest) (Cart, error)
 	ClearCart(ctx context.Context, userID int32) (Cart, error)
-	RefreshCart(ctx context.Context, userID int32, req RefreshCartRequest) (Cart, error)
 }

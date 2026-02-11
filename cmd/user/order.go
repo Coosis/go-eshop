@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Coosis/go-eshop/internal/orders"
 	"github.com/spf13/cobra"
 )
 
@@ -206,9 +205,8 @@ func payOrder(cmd *cobra.Command, args []string) error {
 	if payOrderID <= 0 {
 		return fmt.Errorf("invalid order ID: %d", payOrderID)
 	}
-	orig_req, err := json.Marshal(orders.PayOrderRequest{
-		OrderID: payOrderID,
-		PaymentIntentID: paymentIntentID,
+	orig_req, err := json.Marshal(map[string]any{
+		"payment_intent_id": paymentIntentID,
 	})
 	if err != nil {
 		return err

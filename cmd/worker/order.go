@@ -73,7 +73,7 @@ func createOrder(
 				for _, msg := range msgs {
 					log.Infof("Worker %s processing message: %v", workerID, msg)
 
-					err := handleCreateOrder(ctx, client, db, workerID, msg)
+					err := handleCreateOrder(ctx, db, workerID, msg)
 					if err != nil {
 						log.Errorf("Failed to handle message: %v", err)
 						continue

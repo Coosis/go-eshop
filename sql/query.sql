@@ -128,9 +128,9 @@ WITH old_cart AS (
   SET price_cents_snapshot = p.price_cents,
       updated_at = NOW(),
       qty = CASE 
-      WHEN ci.product_id = $2 AND ci.qty + @delta >= 0
+      WHEN ci.product_id = $2
         THEN ci.qty + @delta
-        ELSE 0 END
+        ELSE ci.qty END
   FROM products p
   WHERE cart_id = (SELECT id FROM old_cart)
     AND product_id = p.id
@@ -267,7 +267,7 @@ FROM stock_adjustments
 WHERE product_id = $1
   AND (@created_after::timestamptz IS NULL OR created_at >= @created_after::timestamptz)
   AND (@created_before::timestamptz IS NULL OR created_at <= @created_before::timestamptz)
-  AND (@created_by IS NULL OR @created_by = '' OR created_by = @created_by)
+  AND (@created_by::TEXT IS NULL OR @created_by = '' OR created_by = @created_by)
   AND (@min_delta::int IS NULL OR delta >= @min_delta::int)
   AND (@max_delta::int IS NULL OR delta <= @max_delta::int)
 ORDER BY created_at DESC

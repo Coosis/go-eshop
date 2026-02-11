@@ -50,6 +50,13 @@ func init() {
 		"number of seckill events per page",
 	)
 
+	getSeckillStatusCmd.Flags().StringVar(
+		&seckillStatusKey,
+		"idempotency-key",
+		"",
+		"the idempotency key for the purchase attempt",
+	)
+
 	rootCmd.Flags().StringVar(
 		&seckillPath,
 		"seckill-path",
@@ -66,6 +73,7 @@ func init() {
 var (
 	seckillPath string
 	seckillKey  string
+	seckillStatusKey string
 
 	seckillEventID int32
 	seckillQuantity int64
@@ -163,20 +171,22 @@ func getSeckillByID(cmd *cobra.Command, args []string) error {
 }
 
 var getSeckillStatusCmd = &cobra.Command{
-	Use:   "get-seckill-status [event_id]",
+	Use:   "get-seckill-status",
 	Short: "Get the status of a seckill event",
-	Long:  `This command retrieves the current status of a specific seckill event by its ID.`,
+	Long:  `This command retrieves the current status of a specific seckill purchase by idempotency key.`,
 	RunE: getSeckillStatus,
 }
 
 func getSeckillStatus(cmd *cobra.Command, args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("seckill event ID is required")
+	if seckillStatusKey == "" {
+		if len(args) < 1 {
+			return fmt.Errorf("idempotency key is required")
+		}
+		seckillStatusKey = args[0]
 	}
-	eventID := args[0]
 	req, err := http.NewRequest(
 		"GET",
-		fmt.Sprintf("%s%s%s%s/status", serverURL, seckillPath, "/attempts/", eventID),
+		fmt.Sprintf("%s%s%s%s/status", serverURL, seckillPath, "/attempts/", seckillStatusKey),
 		nil,
 	)
 	if err != nil {
