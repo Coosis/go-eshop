@@ -1,6 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-DROP TABLE IF EXISTS seckill_outbox;
 DROP TABLE IF EXISTS seckill_events;
 
 DROP TABLE IF EXISTS order_items;
@@ -27,6 +26,9 @@ CREATE TABLE users (
 	created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
 	last_login_at TIMESTAMPTZ
 );
+
+-- TODO! remove mock
+INSERT INTO users (last_login_at) VALUES (null);
 
 CREATE TABLE user_credentials (
 	user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -70,6 +72,8 @@ CREATE TABLE categories (
   parent_id  INTEGER REFERENCES categories(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX ON categories(slug);
+CREATE INDEX ON categories(parent_id);
 
 CREATE TABLE product_categories (
   product_id  INTEGER  REFERENCES products(id) ON DELETE CASCADE,
@@ -79,7 +83,7 @@ CREATE TABLE product_categories (
 
 CREATE TABLE stock_levels (
   product_id   INTEGER PRIMARY KEY REFERENCES products(id),
-  on_hand      INTEGER NOT NULL DEFAULT 0,     -- physical units
+  on_hand      INTEGER NOT NULL DEFAULT 0,     -- non soft holds
   reserved     INTEGER NOT NULL DEFAULT 0,     -- soft holds
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (on_hand >= 0),
@@ -93,7 +97,8 @@ CREATE TABLE stock_adjustments (
   delta         INTEGER NOT NULL, -- +receiving, -damage, etc.
   reason        TEXT NOT NULL,    -- 'receiving','return','correction',...
   created_by    TEXT NOT NULL,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (delta <> 0)
 );
 
 CREATE TABLE carts (
@@ -103,8 +108,12 @@ CREATE TABLE carts (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX ON carts(user_id);
 
-create table cart_items (
+-- TODO! remove mock
+INSERT INTO carts (user_id) VALUES (1);
+
+CREATE TABLE cart_items (
   id                   SERIAL  PRIMARY KEY,
   cart_id              INTEGER NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
   product_id           INTEGER NOT NULL REFERENCES products(id),
@@ -134,13 +143,17 @@ CREATE TABLE orders (
   total_cents         BIGINT NOT NULL,
   status              order_status NOT NULL DEFAULT 'waiting_payment',
 
+  idempotency_key     TEXT NOT NULL,        -- for safe retries
+
   payment_intent_id   TEXT,                 -- from Payment Service/PSP
 
   notes               TEXT,
 
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  version             BIGINT NOT NULL DEFAULT 1
+  version             BIGINT NOT NULL DEFAULT 1,
+
+  UNIQUE (user_id, idempotency_key)
 );
 
 CREATE TABLE order_items (
@@ -165,15 +178,9 @@ CREATE TABLE seckill_events (
     seckill_stock   INTEGER NOT NULL CHECK (seckill_stock >= 0),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    preheated_at    TIMESTAMPTZ,
     CHECK (end_time > start_time),
     UNIQUE (product_id, start_time)
 );
-
-CREATE TABLE seckill_outbox (
-    id              BIGSERIAL PRIMARY KEY,
-    event_id        INTEGER NOT NULL REFERENCES products(id),
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    preheated_at    TIMESTAMPTZ,
-    scheduled_at    TIMESTAMPTZ NOT NULL
-);
-CREATE INDEX ON seckill_outbox(preheated_at);
+CREATE INDEX ON seckill_events(start_time) WHERE preheated_at IS NULL;

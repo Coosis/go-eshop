@@ -40,6 +40,7 @@
           default = pkgs.mkShell {
             buildInputs = with pkgs; [
               sqlc
+              hurl
             ];
             shellHook = "export SHELL=$(which zsh)";
           };
