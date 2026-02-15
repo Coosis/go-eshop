@@ -26,6 +26,10 @@ func (h *CatalogHandler) GetProducts(c echo.Context) error {
 		log.Errorf("error binding filter params: %v", err)
 		return c.JSON(400, map[string]string{"error": "malformed filter parameters"})
 	}
+	if err := c.Validate(f); err != nil {
+		log.Errorf("validation error: %v", err)
+		return c.JSON(400, map[string]string{"error": "invalid filter parameters"})
+	}
 	page, err := h.Svc.GetProducts(c.Request().Context(), f)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -39,15 +43,19 @@ func (h *CatalogHandler) GetProducts(c echo.Context) error {
 }
 
 func (h *CatalogHandler) GetProductByID(c echo.Context) error {
-	type pathParams struct {
+	type params struct {
 		ID int32 `param:"id" validate:"required"`
 	}
-	var params pathParams
-	if err := c.Bind(&params); err != nil {
+	var p params
+	if err := c.Bind(&p); err != nil {
 		log.Errorf("error binding path params: %v", err)
 		return c.JSON(400, map[string]string{"error": "invalid product ID"})
 	}
-	product, err := h.Svc.GetProductByID(c.Request().Context(), params.ID)
+	if err := c.Validate(p); err != nil {
+		log.Errorf("validation error: %v", err)
+		return c.JSON(400, map[string]string{"error": "invalid product ID"})
+	}
+	product, err := h.Svc.GetProductByID(c.Request().Context(), p.ID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			log.Warnf("no products found: %v", err)
@@ -66,6 +74,10 @@ func (h *CatalogHandler) GetProductBySlug(c echo.Context) error {
 	var p params
 	if err := c.Bind(&p); err != nil {
 		log.Errorf("error binding path params: %v", err)
+		return c.JSON(400, map[string]string{"error": "invalid product slug"})
+	}
+	if err := c.Validate(p); err != nil {
+		log.Errorf("validation error: %v", err)
 		return c.JSON(400, map[string]string{"error": "invalid product slug"})
 	}
 	product, err := h.Svc.GetProductBySlug(c.Request().Context(), p.Slug)

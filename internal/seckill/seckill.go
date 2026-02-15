@@ -61,6 +61,16 @@ func (s *SeckillActor) GetSeckillEvents(
 }
 
 func (s *SeckillActor) GetSeckillEventByID(ctx context.Context, id int32) (SeckillEvent, error) {
+	if !comm.BFExists(
+		ctx,
+		s.Client,
+		comm.BF_products_id,
+		id,
+	) {
+		log.Warnf("product ID %d not found in bloom filter", id)
+		return SeckillEvent{}, fmt.Errorf("product ID %d not found", id)
+	}
+
 	log.Infof("Getting seckill event by ID: %d", id)
 	queries := sqlc.New(s.Pool)
 	row, err := queries.GetSeckillEventByID(ctx, id)
@@ -99,6 +109,15 @@ func (s *SeckillActor) AddSeckillEvent(ctx context.Context, new_event SeckillEve
 	if err != nil {
 		return SeckillEvent{}, fmt.Errorf("failed to add seckill event: %w", err)
 	}
+	_, err = comm.BFAdd(
+		ctx,
+		s.Client,
+		comm.BF_seckill_events,
+		fmt.Sprintf("%d", row.ID),
+	).Result()
+	if err != nil {
+		log.Errorf("Failed to add seckill event ID=%d to Bloom filter: %v", row.ID, err)
+	}
 	return SeckillEvent{
 		ID:                row.ID,
 		ProductID:         row.ProductID,
@@ -136,6 +155,15 @@ func (s *SeckillActor) UpdateSeckillEventByID(
 	if err != nil {
 		return SeckillEvent{}, fmt.Errorf("failed to update seckill event by ID: %w", err)
 	}
+	_, err = comm.BFAdd(
+		ctx,
+		s.Client,
+		comm.BF_seckill_events,
+		fmt.Sprintf("%d", row.ID),
+	).Result()
+	if err != nil {
+		log.Errorf("Failed to add seckill event ID=%d to Bloom filter after update: %v", row.ID, err)
+	}
 	return SeckillEvent{
 		ID:                row.ID,
 		ProductID:         row.ProductID,
@@ -159,6 +187,12 @@ func (s *SeckillActor) PurchaseSeckillProduct(
 	)
 	lua := `
 	local event_id = KEYS[1]
+
+	local exists = redis.call("BF.EXISTS", "bf_seckill_events", event_id)
+	if exists == 0 then
+		return "ERR:event_not_found"
+	end
+
 	local idempotency_key = KEYS[2]
 	local qty = tonumber(ARGV[1])
 	

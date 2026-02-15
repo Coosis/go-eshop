@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/Coosis/go-eshop/internal/comm"
 	sqlc "github.com/Coosis/go-eshop/sqlc"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -46,6 +48,16 @@ func main() {
 		panic(err)
 	}
 	client = redis.NewClient(opt)
+	if err := comm.BFReserve(
+		context.Background(),
+		client,
+		"bf_seckill_events",
+	).Err(); err != nil {
+		if !strings.Contains(err.Error(), "exist") {
+			log.Errorf("Failed to create Bloom filter: %v", err)
+			return
+		}
+	}
 
 	url := "postgres://postgres:passwd@localhost:5433/postgres"
 	cfg, err := pgxpool.ParseConfig(url)
@@ -148,6 +160,8 @@ func schedulerCheck() {
 			local not_started_key = KEYS[3]
 			local event_len_ms_key = KEYS[4]
 
+			local event_id = KEYS[5]
+
 			local stock = ARGV[1]
 			local price = ARGV[2]
 
@@ -160,6 +174,7 @@ func schedulerCheck() {
 			redis.call("SET", stock_key, stock, "NX", "PX", until_end_ms)
 			redis.call("SET", price_key, price, "NX", "PX", until_end_ms)
 			redis.call("SET", not_started_key, 1, "NX", "PX", until_start_ms)
+			redis.call("BF.ADD", "bf_seckill_events", event_id)
 			return 1
 		`
 
@@ -171,6 +186,7 @@ func schedulerCheck() {
 				fmt.Sprintf(redisKeyEventPriceFmt, r.ID),
 				fmt.Sprintf(redisKeyEventNotStartedFmt, r.ID),
 				fmt.Sprintf(redisKeyEventLenMsFmt, r.ID),
+				fmt.Sprintf("%d", r.ID),
 			},
 			r.SeckillStock,
 			r.SeckillPriceCents,

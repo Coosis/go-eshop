@@ -667,3 +667,20 @@ WITH order_items AS (
 ) SELECT
   (SELECT COUNT(*) FROM order_items) AS total_items,
   (SELECT COUNT(*) FROM upd) AS successfully_finalized_items;
+
+-- preheating cache on service startup -----------------------------------------------
+
+
+-- name: GetProductsChunk :many
+SELECT id, slug
+FROM products
+WHERE id > $1
+ORDER BY id
+LIMIT $2;
+
+-- name: GetCategoriesChunk :many
+SELECT id, slug
+FROM categories
+WHERE id > $1
+ORDER BY id
+LIMIT $2;

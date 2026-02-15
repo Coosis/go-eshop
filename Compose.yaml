@@ -17,8 +17,12 @@ services:
       - 8081:8080
 
   cache:
-    image: redis:8.4-alpine
+    image: redis/redis-stack-server:latest
     restart: always
     ports:
       - "6380:6379"
-    command: redis-server --save 20 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "BF.EXISTS", "bf_seckill_events", "1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

@@ -3,7 +3,9 @@ package catalog
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/redis/go-redis/v9"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/Coosis/go-eshop/internal/comm"
@@ -15,6 +17,7 @@ import (
 
 type CatalogActor struct {
 	Pool *pgxpool.Pool
+	Client *redis.Client
 }
 
 // products
@@ -76,6 +79,16 @@ func (c *CatalogActor) GetProductByID(
 	ctx context.Context,
 	id int32,
 ) (Product, error) {
+	if !comm.BFExists(
+		ctx,
+		c.Client,
+		comm.BF_products_id,
+		id,
+	) {
+		log.Warnf("product ID %d not found in bloom filter", id)
+		return Product{}, fmt.Errorf("product ID %d not found", id)
+	}
+
 	queries := sqlc.New(c.Pool)
 	row, err := queries.GetProductByID(ctx, id)
 	log.Infof("GetProductByID called with id: %d", id)
@@ -103,6 +116,15 @@ func (c *CatalogActor) GetProductBySlug(
 	ctx context.Context,
 	slug string,
 ) (Product, error) {
+	if !comm.BFExists(
+		ctx,
+		c.Client,
+		comm.BF_products_slug,
+		slug,
+	) {
+		log.Warnf("product slug %s not found in bloom filter", slug)
+		return Product{}, fmt.Errorf("product slug %s not found", slug)
+	}
 	quieries := sqlc.New(c.Pool)
 	row, err := quieries.GetProductBySlug(ctx, slug)
 	log.Infof("GetProductBySlug called with slug: %s", slug)
@@ -165,6 +187,16 @@ func (c *CatalogActor) GetCategoryByID(
 	ctx context.Context,
 	id int32,
 ) (Category, error) {
+	if !comm.BFExists(
+		ctx,
+		c.Client,
+		comm.BF_categories_id,
+		id,
+	) {
+		log.Warnf("category ID %d not found in bloom filter", id)
+		return Category{}, fmt.Errorf("category not found")
+	}
+
 	queries := sqlc.New(c.Pool)
 	row, err := queries.GetCategoryByID(ctx, id)
 	log.Infof("GetCategoryByID called with id: %d", id)
@@ -188,6 +220,16 @@ func (c *CatalogActor) GetCategoryBySlug(
 	ctx context.Context,
 	slug string,
 ) (Category, error) {
+	if !comm.BFExists(
+		ctx,
+		c.Client,
+		comm.BF_categories_slug,
+		slug,
+	) {
+		log.Warnf("category slug %s not found in bloom filter", slug)
+		return Category{}, fmt.Errorf("category not found")
+	}
+
 	queries := sqlc.New(c.Pool)
 	row, err := queries.GetCategoryBySlug(ctx, slug)
 	log.Infof("GetCategoryByID called with slug: %v", slug)
@@ -213,6 +255,16 @@ func (c *CatalogActor) GetProductsByCategoryID(
 ) (comm.Page[Product], error) {
 	if filter.CategoryID == nil {
 		return comm.Page[Product]{}, fmt.Errorf("CategoryID is required in filter")
+	} else {
+		if !comm.BFExists(
+			ctx,
+			c.Client,
+			comm.BF_categories_id,
+			*filter.CategoryID,
+		) {
+			log.Warnf("category ID %d not found in bloom filter", *filter.CategoryID)
+			return comm.Page[Product]{}, fmt.Errorf("category not found")
+		}
 	}
 	page := comm.Page[Product]{}
 	page.Page = filter.Page
@@ -283,6 +335,22 @@ func (c *CatalogActor) CreateProduct(
 		},
 		PriceVersion: row.PriceVersion,
 	}
+
+	// best effort
+	if err := comm.BFReserve(ctx, c.Client, comm.BF_products_id).Err(); err != nil && !strings.Contains(err.Error(), "exist") {
+		log.Errorf("error reserving bloom filter for products id: %v", err)
+		// keep going, doesn't matter
+	}
+	if err := comm.BFReserve(ctx, c.Client, comm.BF_products_slug).Err(); err != nil && !strings.Contains(err.Error(), "exist") {
+		log.Errorf("error reserving bloom filter for products slug: %v", err)
+	}
+	if err := comm.BFAdd(ctx, c.Client, comm.BF_products_slug, req.Slug).Err(); err != nil {
+		log.Errorf("error adding product slug to bloom filter: %v", err)
+	}
+	if err := comm.BFAdd(ctx, c.Client, comm.BF_products_id, row.ID).Err(); err != nil {
+		log.Errorf("error adding product id to bloom filter: %v", err)
+	}
+
 	return product, nil
 }
 
@@ -290,6 +358,16 @@ func (c *CatalogActor) UpdateProductByID(
 	ctx context.Context,
 	req UpdateProductRequest,
 ) (Product, error) {
+	if !comm.BFExists(
+		ctx,
+		c.Client,
+		comm.BF_products_id,
+		req.ID,
+	) {
+		log.Warnf("product ID %d not found in bloom filter", req.ID)
+		return Product{}, fmt.Errorf("product not found")
+	}
+
 	var desc pgtype.Text
 	if req.Description != nil {
 		desc = pgtype.Text{String: *req.Description, Valid: true}
@@ -322,6 +400,10 @@ func (c *CatalogActor) UpdateProductByID(
 		},
 		PriceVersion: row.PriceVersion,
 	}
+	// slug for bf
+	if err := comm.BFAdd(ctx, c.Client, comm.BF_products_slug, req.Slug).Err(); err != nil {
+		log.Errorf("error adding product slug to bloom filter: %v", err)
+	}
 	return product, nil
 }
 
@@ -329,6 +411,16 @@ func (c *CatalogActor) CreateCategory(
 	ctx context.Context,
 	req CreateCategoryRequest,
 ) (Category, error) {
+	if req.ParentID != nil && !comm.BFExists(
+		ctx,
+		c.Client,
+		comm.BF_categories_id,
+		*req.ParentID,
+	) {
+		log.Warnf("parent category ID %d not found in bloom filter", *req.ParentID)
+		return Category{}, fmt.Errorf("parent category not found")
+	}
+
 	var parentID pgtype.Int4
 	if req.ParentID != nil {
 		parentID = pgtype.Int4{Int32: *req.ParentID, Valid: true}
@@ -356,6 +448,18 @@ func (c *CatalogActor) CreateCategory(
 			ParentID: &row.ParentID.Int32,
 		},
 	}
+	if err := comm.BFReserve(ctx, c.Client, comm.BF_categories_id).Err(); err != nil && !strings.Contains(err.Error(), "exist") {
+		log.Errorf("error reserving bloom filter for categories id: %v", err)
+	}
+	if err := comm.BFReserve(ctx, c.Client, comm.BF_categories_slug).Err(); err != nil && !strings.Contains(err.Error(), "exist") {
+		log.Errorf("error reserving bloom filter for categories slug: %v", err)
+	}
+	if err := comm.BFAdd(ctx, c.Client, comm.BF_categories_id, row.ID).Err(); err != nil {
+		log.Errorf("error adding category id to bloom filter: %v", err)
+	}
+	if err := comm.BFAdd(ctx, c.Client, comm.BF_categories_slug, req.Slug).Err(); err != nil {
+		log.Errorf("error adding category slug to bloom filter: %v", err)
+	}
 	return category, nil
 }
 
@@ -363,6 +467,26 @@ func (c *CatalogActor) UpdateCategoryByID(
 	ctx context.Context,
 	req UpdateCategoryRequest,
 ) (Category, error) {
+	if !comm.BFExists(
+		ctx,
+		c.Client,
+		comm.BF_categories_id,
+		req.ID,
+	) {
+		log.Warnf("category ID %d not found in bloom filter", req.ID)
+		return Category{}, fmt.Errorf("category not found")
+	}
+
+	if req.ParentID != nil && !comm.BFExists(
+		ctx,
+		c.Client,
+		comm.BF_categories_id,
+		*req.ParentID,
+	) {
+		log.Warnf("parent category ID %d not found in bloom filter", *req.ParentID)
+		return Category{}, fmt.Errorf("parent category not found")
+	}
+
 	var parentID pgtype.Int4
 	if req.ParentID != nil {
 		parentID = pgtype.Int4{Int32: *req.ParentID, Valid: true}
@@ -390,6 +514,10 @@ func (c *CatalogActor) UpdateCategoryByID(
 			Slug:     row.Slug,
 			ParentID: &row.ParentID.Int32,
 		},
+	}
+	// slug for bf
+	if err := comm.BFAdd(ctx, c.Client, comm.BF_categories_slug, req.Slug).Err(); err != nil {
+		log.Errorf("error adding category slug to bloom filter: %v", err)
 	}
 	return category, nil
 }
