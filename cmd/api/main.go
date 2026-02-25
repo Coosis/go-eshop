@@ -35,6 +35,7 @@ func init() {
 func main() {
 	ServiceWarm.Store(false)
 
+	// opt, err := redis.ParseURL("redis://10.104.0.3:6380/0")
 	opt, err := redis.ParseURL("redis://127.0.0.1:6380/0")
 	if err != nil {
 		panic(err)
@@ -58,6 +59,7 @@ func main() {
 	}
 
 	url := "postgres://postgres:passwd@localhost:5433/postgres"
+	// url := "postgres://eshop:passwd@10.104.0.5:5432/eshop"
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		log.Errorf("Failed to parse DB config: %v", err)

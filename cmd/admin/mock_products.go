@@ -21,11 +21,25 @@ func init() {
 		"product_sheet.csv",
 		"path to the file containing mock product data",
 	)
+	mockProductsCmd.PersistentFlags().Int32Var(
+		&mock_products_initial_stock,
+		"initial-stock",
+		5000,
+		"initial stock delta to apply for each created product",
+	)
+	mockProductsCmd.PersistentFlags().StringVar(
+		&mock_products_stock_reason,
+		"stock-reason",
+		"initial stock for mock product",
+		"stock adjustment reason for created products",
+	)
 	rootCmd.AddCommand(mockProductsCmd)
 }
 
 var (
-	mock_products_csv_path string
+	mock_products_csv_path      string
+	mock_products_initial_stock int32
+	mock_products_stock_reason  string
 )
 
 var mockProductsCmd = &cobra.Command{
@@ -37,6 +51,7 @@ The CSV file should have the following columns:
 name,description.
 For price, a random price between $0.00 and $30.00 will be assigned.
 For category IDs, no categories will be assigned.
+By default, each created product receives +5000 stock. Override via --initial-stock.
 	`,
 	RunE: addMockProducts,
 }
@@ -74,7 +89,12 @@ func addMockProducts(cmd *cobra.Command, args []string) error {
 			fmt.Printf("error adding product: %v, skipping...", err)
 			continue
 		}
-		err = adjustStockLevel(context.Background(), pid, 100, "initial stock for mock product")
+		err = adjustStockLevel(
+			context.Background(),
+			pid,
+			mock_products_initial_stock,
+			mock_products_stock_reason,
+		)
 		if err != nil {
 			fmt.Printf("error adjusting stock level for product ID %d: %v, skipping...\n", pid, err)
 		}
@@ -128,7 +148,7 @@ func adjustStockLevel(
 ) error {
 	reqBody := map[string]any{
 		"product_id": productID,
-		"delta":  delta,
+		"delta":      delta,
 		"reason":     reason,
 		"created_by": "mock-products-cmd",
 	}

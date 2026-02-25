@@ -82,7 +82,7 @@ type CatalogService interface {
 }
 
 type ProductFilter struct {
-	CategoryID *int32 `param:"id" validate:"min=1,omitempty"`
+	CategoryID *int32 `param:"id" validate:"omitempty,min=1"`
 	PerPage    int32  `query:"per_page" validate:"required,min=1,max=250"`
 	Page       int32  `query:"page" validate:"required,min=1"`
 	Q          string `query:"q" validate:"omitempty"`

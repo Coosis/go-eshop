@@ -1,14 +1,15 @@
 package comm
 
 import (
-	log "github.com/sirupsen/logrus"
 	"context"
+	log "github.com/sirupsen/logrus"
+	"strings"
 
 	"github.com/redis/go-redis/v9"
 )
 
 const (
-	BF_ErrorRate = 0.01
+	BF_ErrorRate   = 0.01
 	BF_InitialSize = 1000000
 )
 
@@ -46,12 +47,23 @@ func BFExists(
 	key string,
 	item any,
 ) bool {
-	res, err := client.Do(ctx, "BF.EXISTS", key, item).Int()
+	res, err := client.Do(ctx, "BF.EXISTS", key, item).Result()
 	if err != nil {
 		log.Errorf("Failed to check Bloom filter existence: %v", err)
 		return false
 	}
-	return res == 1
+	switch v := res.(type) {
+	case bool:
+		return v
+	case int64:
+		return v == 1
+	case string:
+		s := strings.TrimSpace(strings.ToLower(v))
+		return s == "1" || s == "true"
+	default:
+		log.Errorf("Unexpected Bloom EXISTS response type: %T (%v)", res, res)
+		return false
+	}
 }
 
 func BFAdd(

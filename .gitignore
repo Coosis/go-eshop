@@ -1,6 +1,9 @@
 .DS_Store
 .direnv
 
+exports
+test/load
+
 *.sh
 *.bak
 sqlc/
