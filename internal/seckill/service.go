@@ -50,6 +50,7 @@ type SeckillService interface {
 	PurchaseSeckillProduct(
 		ctx context.Context,
 		userID int32,
+		ip string,
 		attempt SeckillAttempt,
 	) (SeckillAttemptStatus, error)
 	GetSeckillPurchase(

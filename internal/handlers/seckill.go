@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"net"
+
 	log "github.com/sirupsen/logrus"
 
 	"github.com/Coosis/go-eshop/internal/auth"
@@ -108,7 +110,13 @@ func (h *SeckillHandler) AttemptSeckill(e echo.Context) error {
 		log.Errorf("error binding request body: %v", err)
 		return e.JSON(400, map[string]string{"error": "malformed request body"})
 	}
-	stats, err := h.Svc.PurchaseSeckillProduct(e.Request().Context(), userID, attempt)
+	client_addr := e.Request().RemoteAddr
+	client_ip, _, err := net.SplitHostPort(client_addr);
+	if err != nil {
+		log.Warnf("error parsing client IP from RemoteAddr: %v", err)
+		return e.JSON(400, map[string]string{"error": "invalid client IP address"})
+	}
+	stats, err := h.Svc.PurchaseSeckillProduct(e.Request().Context(), userID, client_ip, attempt)
 	if err != nil {
 		log.Errorf("error attempting seckill: %v", err)
 		return e.JSON(500, map[string]string{"error": "internal server error"})
@@ -133,27 +141,3 @@ func (h *SeckillHandler) GetSeckillPurchase(e echo.Context) error {
 	}
 	return e.JSON(200, stats)
 }
-// func (h *SeckillHandler) MarkPreheated(e echo.Context) error {
-// 	type Param struct {
-// 		EventID int64 `json:"event_id"`
-// 	}
-// 	var p Param
-// 	if err := e.Bind(&p); err != nil {
-// 		log.Errorf("error binding request body: %v", err)
-// 		return e.JSON(400, map[string]string{"error": "malformed request body"})
-// 	}
-// 	if err := h.Svc.MarkPreheated(e.Request().Context(), p.EventID); err != nil {
-// 		log.Errorf("error marking event preheated: %v", err)
-// 		return e.JSON(500, map[string]string{"error": "internal server error"})
-// 	}
-// 	return e.JSON(200, "{}")
-// }
-//
-// func (h *SeckillHandler) GetEventPreheat(e echo.Context) error {
-// 	events, err := h.Svc.GetEventPreheat(e.Request().Context())
-// 	if err != nil {
-// 		log.Errorf("error getting preheated events: %v", err)
-// 		return e.JSON(500, map[string]string{"error": "internal server error"})
-// 	}
-// 	return e.JSON(200, events)
-// }

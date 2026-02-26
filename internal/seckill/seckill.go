@@ -177,6 +177,7 @@ func (s *SeckillActor) UpdateSeckillEventByID(
 func (s *SeckillActor) PurchaseSeckillProduct(
 	ctx context.Context,
 	userID int32,
+	ip string,
 	attempt SeckillAttempt,
 ) (SeckillAttemptStatus, error) {
 	log.Infof("User %d attempting to purchase seckill product: EventID=%d, Quantity=%d, IdempotencyKey=%s",
@@ -185,6 +186,10 @@ func (s *SeckillActor) PurchaseSeckillProduct(
 		attempt.Quantity,
 		attempt.IdempotencyKey,
 	)
+	// 3 layers of limiting:
+	// 1. per ip
+	// 2. per user
+	// 3. per event
 	lua := `
 	local event_id = KEYS[1]
 
@@ -193,12 +198,12 @@ func (s *SeckillActor) PurchaseSeckillProduct(
 		return "ERR:event_not_found"
 	end
 
-	local idempotency_key = KEYS[2]
-	local qty = tonumber(ARGV[1])
+	local idempotency_key = KEYS[5]
+	local qty = tonumber(ARGV[4])
 	
-	local attempt_key = "seckill_attempt:" .. idempotency_key
+	local attempt_key = KEYS[6]
 
-	local not_started_key = "seckill_event:" .. event_id .. ":not_started"
+	local not_started_key = KEYS[7]
 	if redis.call("EXISTS", not_started_key) == 1 then
 		return "ERR:event_not_started"
 	end
@@ -207,6 +212,53 @@ func (s *SeckillActor) PurchaseSeckillProduct(
 	if prev ~= nil and prev ~= false then
 		return prev
 	end
+
+	local ip_limit_key = KEYS[2]
+	local ip_limit = tonumber(ARGV[1])
+	local ip_vio_key = KEYS[8]
+	local ip_blacklist_key = KEYS[9]
+	local user_limit_key = KEYS[3]
+	local user_limit = tonumber(ARGV[2])
+	local user_vio_key = KEYS[10]
+	local user_blacklist_key = KEYS[11]
+	local event_limit_key = KEYS[4]
+	local event_limit = tonumber(ARGV[3])
+
+	if redis.call("EXISTS", ip_blacklist_key) == 1 then
+	    return "ERR:ip_blacklisted"
+	end
+
+	if redis.call("EXISTS", user_blacklist_key) == 1 then
+	    return "ERR:user_blacklisted"
+	end
+	
+	local ip_cnt = redis.call("INCR", ip_limit_key)
+	if ip_cnt == 1 then redis.call("EXPIRE", ip_limit_key, 1) end
+	if ip_cnt > ip_limit then
+		local cnt = redis.call("INCR", ip_vio_key)
+		if cnt == 1 then redis.call("EXPIRE", ip_vio_key, 60) end
+		if cnt >= 10 then
+			redis.call("DEL", ip_vio_key)
+			redis.call("SET", ip_blacklist_key, 1, "EX", 300)
+		end
+		return "ERR:ip_rate_limited" 
+	end
+
+	local user_cnt = redis.call("INCR", user_limit_key)
+	if user_cnt == 1 then redis.call("EXPIRE", user_limit_key, 1) end
+	if user_cnt > user_limit then
+		local cnt = redis.call("INCR", user_vio_key)
+		if cnt == 1 then redis.call("EXPIRE", user_vio_key, 60) end
+		if cnt >= 10 then
+			redis.call("DEL", user_vio_key)
+			redis.call("SET", user_blacklist_key, 1, "EX", 300)
+		end
+		return "ERR:user_rate_limited"
+	end
+
+	local event_cnt = redis.call("INCR", event_limit_key)
+	if event_cnt == 1 then redis.call("EXPIRE", event_limit_key, 1) end
+	if event_cnt > event_limit then return "ERR:event_rate_limited" end
 
 	if qty == nil or qty <= 0 then
 		return "ERR:invalid_qty"
@@ -246,10 +298,23 @@ func (s *SeckillActor) PurchaseSeckillProduct(
 		lua, 
 		// keys
 		[]string{
-			fmt.Sprintf("%d", attempt.EventID),
-			fmt.Sprintf("%d:%s", userID, attempt.IdempotencyKey),
+			fmt.Sprintf("%d", attempt.EventID), // KEY 1
+			fmt.Sprintf("seckill_ip_limit:%s", ip), // ip limit key
+			fmt.Sprintf("seckill_user_limit:%d", userID), // user limit key
+			fmt.Sprintf("seckill_event_limit:%d", attempt.EventID), // event limit key
+			fmt.Sprintf("%d:%s", userID, attempt.IdempotencyKey), // idempotency key
+			fmt.Sprintf("seckill_attempt:%d:%s", userID, attempt.IdempotencyKey), // attempt key
+			fmt.Sprintf("seckill_event:%v:not_started", attempt.EventID), // not started key
+
+			fmt.Sprintf("viol:ip:%s", ip),
+			fmt.Sprintf("blacklist:ip:%s", ip),
+			fmt.Sprintf("viol:user:%d", userID),
+			fmt.Sprintf("blacklist:user:%d", userID),
 		},
 		// args
+		fmt.Sprintf("%d", 500), // ip limit
+		fmt.Sprintf("%d", 10),  // user limit
+		fmt.Sprintf("%d", 1000000), // event limit
 		fmt.Sprintf("%d", attempt.Quantity),
 	).Result()
 	if err != nil {
