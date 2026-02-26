@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/Coosis/go-eshop/internal/orders"
 	sqlc "github.com/Coosis/go-eshop/sqlc"
 	"github.com/jackc/pgx/v5/pgtype"
 	log "github.com/sirupsen/logrus"
@@ -21,11 +21,8 @@ const (
 	stealCnt           = 10
 )
 
-func createOrder(
+func (w *Worker) createOrder(
 	ctx context.Context,
-	client *redis.Client,
-	db sqlc.DBTX,
-	workerID string,
 ) error {
 	res, err := client.XGroupCreateMkStream(
 		ctx,
@@ -42,6 +39,8 @@ func createOrder(
 			return err
 		}
 	}
+
+	var worker_identifier string = fmt.Sprintf("worker-%d", w.workerID)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -62,7 +61,7 @@ func createOrder(
 					MinIdle:  time.Second * 30,
 					Start:    scan_head,
 					Count:    stealCnt,
-					Consumer: workerID,
+					Consumer: worker_identifier,
 				}).Result()
 				if err != nil {
 					log.Errorf("Failed to auto claim messages: %v", err)
@@ -71,9 +70,9 @@ func createOrder(
 				scan_head = nxt
 
 				for _, msg := range msgs {
-					log.Infof("Worker %s processing message: %v", workerID, msg)
+					log.Infof("%s processing message: %v", worker_identifier, msg)
 
-					err := handleCreateOrder(ctx, db, workerID, msg)
+					err := w.handleCreateOrder(ctx, msg)
 					if err != nil {
 						log.Errorf("Failed to handle message: %v", err)
 						continue
@@ -96,7 +95,7 @@ func createOrder(
 			}
 			msgs, err := client.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    groupName,
-				Consumer: workerID,
+				Consumer: worker_identifier,
 				Streams:  []string{seckillOrderStream, ">"},
 				Count:    10,
 				Block:    time.Second * 3,
@@ -111,9 +110,9 @@ func createOrder(
 			}
 			for _, m := range msgs {
 				for _, msg := range m.Messages {
-					log.Infof("Worker %s processing message: %v", workerID, msg)
+					log.Infof("%s processing message: %v", worker_identifier, msg)
 
-					err := handleCreateOrder(ctx, db, workerID, msg)
+					err := w.handleCreateOrder(ctx, msg)
 					if err != nil {
 						log.Errorf("Failed to handle message: %v", err)
 						continue
@@ -137,10 +136,8 @@ func createOrder(
 	return nil
 }
 
-func handleCreateOrder(
+func (w *Worker) handleCreateOrder(
 	ctx context.Context,
-	db sqlc.DBTX,
-	workerID string,
 	msg redis.XMessage,
 ) error {
 	event_id := msg.Values["event_id"]
@@ -148,8 +145,8 @@ func handleCreateOrder(
 	idempotency_key := msg.Values["idempotency_key"].(string)
 	price := msg.Values["price_cents"].(string)
 	log.Infof(
-		"Worker %s handling order: EventID=%s, Quantity=%s, IdempotencyKey=%s",
-		workerID,
+		"worker-%d handling order: EventID=%s, Quantity=%s, IdempotencyKey=%s",
+		w.workerID,
 		event_id,
 		quantity,
 		idempotency_key,
@@ -172,10 +169,10 @@ func handleCreateOrder(
 		log.Errorf("Invalid quantity in message: %s", quantity)
 		return err
 	}
-	queries := sqlc.New(db)
+	queries := sqlc.New(w.db)
 	if _, err := queries.CreateSeckillOrder(ctx, sqlc.CreateSeckillOrderParams{
 		UserID:         int32(userIDInt),
-		OrderNumber:    orders.GenerateOrderNumber(),
+		OrderNumber:    w.GenerateOrderNumber(),
 		SubtotalCents:  priceInt * qtyInt,
 		Notes:          pgtype.Text{Valid: false},
 		IdempotencyKey: idempotency_key,

@@ -3,13 +3,14 @@ module github.com/Coosis/go-eshop
 go 1.24.6
 
 require (
+	github.com/bwmarrin/snowflake v0.3.0
 	github.com/go-playground/validator/v10 v10.30.1
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/labstack/echo/v4 v4.14.0
-	github.com/oklog/ulid/v2 v2.1.1
 	github.com/redis/go-redis/v9 v9.17.3
 	github.com/sirupsen/logrus v1.9.4
 	github.com/spf13/cobra v1.10.2
+	golang.org/x/sync v0.19.0
 )
 
 require (
@@ -31,7 +32,6 @@ require (
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
 	golang.org/x/net v0.48.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
 	golang.org/x/time v0.14.0 // indirect

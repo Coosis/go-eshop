@@ -45,7 +45,7 @@ func init() {
 func main() {
 	opt, err := redis.ParseURL("redis://localhost:6380/0")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	client = redis.NewClient(opt)
 	if err := comm.BFReserve(

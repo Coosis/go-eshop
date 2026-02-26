@@ -134,7 +134,7 @@ CREATE TYPE order_status AS ENUM (
 
 CREATE TABLE orders (
   id                  SERIAL PRIMARY KEY,
-  order_number        TEXT UNIQUE NOT NULL, -- human-friendly; ULID/base36 OK
+  order_number        TEXT UNIQUE NOT NULL, -- snowflake
 
   user_id             INTEGER NOT NULL REFERENCES users(id),
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -25,6 +26,6 @@ func init() {
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 }

@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"os"
+	"strconv"
+
 	// "fmt"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/bwmarrin/snowflake"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/Coosis/go-eshop/internal/auth"
@@ -32,13 +36,54 @@ func init() {
 	log.SetReportCaller(true)
 }
 
+var (
+	ENV_redisURL = "REDIS_URL"
+	redisURL = "redis://localhost:6380/0"
+
+	ENV_dbURL    = "DB_URL"
+	dbURL    = "postgres://postgres:passwd@localhost:5433/postgres"
+
+	ENV_workerID = "WORKER_ID"
+	workerID int64 = 1
+)
+
 func main() {
 	ServiceWarm.Store(false)
 
-	// opt, err := redis.ParseURL("redis://10.104.0.3:6380/0")
-	opt, err := redis.ParseURL("redis://127.0.0.1:6380/0")
+	if envWorkerID := os.Getenv(ENV_workerID); envWorkerID != "" {
+		i, err := strconv.ParseInt(envWorkerID, 10, 64)
+		if err != nil {
+			log.Warnf("Invalid worker ID in environment variable, should be 64 bit integer. Using default: %d", workerID)
+		} else {
+			workerID = i
+			log.Infof("Using worker ID from environment variable: %d", workerID)
+		}
+	} else {
+		log.Warnf("Environment variable for worker ID not set, using default: %d", workerID)
+	}
+
+	sf_node, err := snowflake.NewNode(workerID)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Failed to create Snowflake node: %v", err)
+	}
+
+	if envRedisUrl := os.Getenv(ENV_redisURL); envRedisUrl != "" {
+		redisURL = envRedisUrl
+		log.Infof("Using Redis URL from environment variable: %s", redisURL)
+	} else {
+		log.Warnf("Environment variable for Redis URL not set, using default: %s", redisURL)
+	}
+
+	if envDbUrl := os.Getenv(ENV_dbURL); envDbUrl != "" {
+		dbURL = envDbUrl
+		log.Infof("Using DB URL from environment variable: %s", dbURL)
+	} else {
+		log.Warnf("Environment variable for DB URL not set, using default: %s", dbURL)
+	}
+
+	opt, err := redis.ParseURL(redisURL)
+	if err != nil {
+		log.Fatalf("Failed to parse Redis URL: %v", err)
 	}
 	client := redis.NewClient(opt)
 
@@ -58,9 +103,7 @@ func main() {
 		}
 	}
 
-	url := "postgres://postgres:passwd@localhost:5433/postgres"
-	// url := "postgres://eshop:passwd@10.104.0.5:5432/eshop"
-	cfg, err := pgxpool.ParseConfig(url)
+	cfg, err := pgxpool.ParseConfig(dbURL)
 	if err != nil {
 		log.Errorf("Failed to parse DB config: %v", err)
 		return
@@ -90,7 +133,7 @@ func main() {
 
 	catalogActor := catalog.CatalogActor{Pool: pool, Client: client}
 	cartActor := cart.CartActor{Pool: pool}
-	orderActor := orders.OrderActor{Pool: pool}
+	orderActor := orders.OrderActor{Pool: pool, Node: sf_node}
 	stockActor := stock.StockActor{Pool: pool}
 	seckillActor := seckill.SeckillActor{Pool: pool, Client: client}
 
@@ -123,6 +166,6 @@ func main() {
 	handlers.RegisterStockRoutes(e, &stockActor)
 	handlers.RegisterSeckillRoutes(e, &seckillActor)
 	if err := e.Start(":8144"); err != nil {
-		panic(err)
+		log.Fatalf("%v", err)
 	}
 }

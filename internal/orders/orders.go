@@ -13,16 +13,16 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/oklog/ulid/v2"
+	"github.com/bwmarrin/snowflake"
 )
 
 type OrderActor struct {
 	Pool *pgxpool.Pool
+	Node *snowflake.Node
 }
 
-func GenerateOrderNumber() string {
-	// TODO! use snowflake
-	return ulid.Make().String()
+func (o *OrderActor) GenerateOrderNumber() string {
+	return o.Node.Generate().String()
 }
 
 func (o *OrderActor) PlaceOrder(
@@ -69,7 +69,7 @@ func (o *OrderActor) PlaceOrder(
 
 	r, err := queries.CreateOrder(ctx, sqlc.CreateOrderParams{
 		UserID:          pgtype.Int4{Int32: req.UserID, Valid: true},
-		OrderNumber:     GenerateOrderNumber(),
+		OrderNumber:     o.GenerateOrderNumber(),
 		DiscountCents:   0,
 		PaymentIntentID: paymentIntentID,
 		Notes:           notes,
